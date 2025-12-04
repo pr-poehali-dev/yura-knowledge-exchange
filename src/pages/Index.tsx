@@ -8,6 +8,7 @@ import { toast } from '@/hooks/use-toast';
 
 type UserRole = 'passenger' | 'driver';
 type OrderStatus = 'searching' | 'found' | 'accepted' | 'completed';
+type TariffType = 'economy' | 'comfort' | 'business';
 
 interface Order {
   id: string;
@@ -17,6 +18,18 @@ interface Order {
   driverName?: string;
   carNumber?: string;
   arrivalTime?: number;
+  tariff?: TariffType;
+  price?: number;
+  distance?: number;
+}
+
+interface Tariff {
+  id: TariffType;
+  name: string;
+  icon: string;
+  basePrice: number;
+  perKm: number;
+  description: string;
 }
 
 const Index = () => {
@@ -26,6 +39,52 @@ const Index = () => {
   const [currentOrder, setCurrentOrder] = useState<Order | null>(null);
   const [incomingOrders, setIncomingOrders] = useState<Order[]>([]);
   const [activeSection, setActiveSection] = useState<string>('order');
+  const [selectedTariff, setSelectedTariff] = useState<TariffType>('economy');
+  const [estimatedPrice, setEstimatedPrice] = useState<number | null>(null);
+
+  const tariffs: Tariff[] = [
+    {
+      id: 'economy',
+      name: 'Эконом',
+      icon: 'Car',
+      basePrice: 100,
+      perKm: 15,
+      description: 'Базовый тариф',
+    },
+    {
+      id: 'comfort',
+      name: 'Комфорт',
+      icon: 'Sparkles',
+      basePrice: 150,
+      perKm: 25,
+      description: 'Комфортные авто',
+    },
+    {
+      id: 'business',
+      name: 'Бизнес',
+      icon: 'Crown',
+      basePrice: 300,
+      perKm: 45,
+      description: 'Премиум класс',
+    },
+  ];
+
+  const calculatePrice = (distance: number, tariff: TariffType): number => {
+    const selectedTariffData = tariffs.find(t => t.id === tariff);
+    if (!selectedTariffData) return 0;
+    return selectedTariffData.basePrice + (distance * selectedTariffData.perKm);
+  };
+
+  const calculateEstimate = () => {
+    if (!from || !to) return;
+    const randomDistance = Math.floor(Math.random() * 20) + 3;
+    const price = calculatePrice(randomDistance, selectedTariff);
+    setEstimatedPrice(price);
+    toast({
+      title: '💰 Расчёт стоимости',
+      description: `~${randomDistance} км • ${price} ₽`,
+    });
+  };
 
   const handleCreateOrder = () => {
     if (!from || !to) {
@@ -37,11 +96,17 @@ const Index = () => {
       return;
     }
 
+    const randomDistance = Math.floor(Math.random() * 20) + 3;
+    const calculatedPrice = calculatePrice(randomDistance, selectedTariff);
+
     const newOrder: Order = {
       id: Date.now().toString(),
       from,
       to,
       status: 'searching',
+      tariff: selectedTariff,
+      price: calculatedPrice,
+      distance: randomDistance,
     };
 
     setCurrentOrder(newOrder);
@@ -168,6 +233,60 @@ const Index = () => {
                     className="border-2"
                   />
                 </div>
+
+                <div className="space-y-3">
+                  <label className="text-sm font-medium flex items-center gap-2">
+                    <Icon name="DollarSign" size={16} className="text-primary" />
+                    Выберите тариф
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {tariffs.map((tariff) => (
+                      <button
+                        key={tariff.id}
+                        onClick={() => setSelectedTariff(tariff.id)}
+                        className={`p-3 rounded-xl border-2 transition-all hover:scale-105 ${
+                          selectedTariff === tariff.id
+                            ? 'border-primary bg-primary/10'
+                            : 'border-border bg-background hover:border-primary/50'
+                        }`}
+                      >
+                        <Icon
+                          name={tariff.icon as any}
+                          size={24}
+                          className={selectedTariff === tariff.id ? 'text-primary mx-auto' : 'text-muted-foreground mx-auto'}
+                        />
+                        <p className={`text-xs font-semibold mt-1 ${selectedTariff === tariff.id ? 'text-primary' : 'text-foreground'}`}>
+                          {tariff.name}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-0.5">от {tariff.basePrice}₽</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {from && to && (
+                  <Button
+                    onClick={calculateEstimate}
+                    variant="outline"
+                    className="w-full border-2"
+                  >
+                    <Icon name="Calculator" className="mr-2" size={18} />
+                    Рассчитать стоимость
+                  </Button>
+                )}
+
+                {estimatedPrice && (
+                  <div className="bg-accent/10 border-2 border-accent/30 rounded-xl p-4 animate-slide-up">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Icon name="Wallet" className="text-accent" size={20} />
+                        <span className="text-sm font-medium">Примерная стоимость</span>
+                      </div>
+                      <span className="text-2xl font-bold text-accent">{estimatedPrice}₽</span>
+                    </div>
+                  </div>
+                )}
+
                 <Button
                   onClick={handleCreateOrder}
                   className="w-full bg-gradient-to-r from-primary to-accent hover:opacity-90 transition-opacity text-lg py-6"
@@ -219,6 +338,16 @@ const Index = () => {
                     <div className="flex items-start gap-2">
                       <Icon name="MapPinned" size={16} className="text-secondary mt-0.5" />
                       <p className="text-muted-foreground">{currentOrder.to}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between pt-3 mt-3 border-t">
+                    <div className="flex items-center gap-2">
+                      <Icon name={tariffs.find(t => t.id === currentOrder.tariff)?.icon as any} size={18} className="text-primary" />
+                      <span className="text-sm font-medium">{tariffs.find(t => t.id === currentOrder.tariff)?.name}</span>
+                      <span className="text-xs text-muted-foreground">• {currentOrder.distance} км</span>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-2xl font-bold text-primary">{currentOrder.price}₽</p>
                     </div>
                   </div>
                 </CardContent>
@@ -289,6 +418,14 @@ const Index = () => {
                               <p className="font-medium">{order.to}</p>
                             </div>
                           </div>
+                        </div>
+                        <div className="flex items-center justify-between bg-accent/10 p-3 rounded-lg">
+                          <div className="flex items-center gap-2">
+                            <Icon name={tariffs.find(t => t.id === order.tariff)?.icon as any} size={16} className="text-accent" />
+                            <span className="text-xs font-medium">{tariffs.find(t => t.id === order.tariff)?.name}</span>
+                            <span className="text-xs text-muted-foreground">• {order.distance} км</span>
+                          </div>
+                          <span className="text-lg font-bold text-accent">{order.price}₽</span>
                         </div>
                         <div className="flex gap-2">
                           <Button
