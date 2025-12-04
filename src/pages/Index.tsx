@@ -21,6 +21,8 @@ interface Order {
   tariff?: TariffType;
   price?: number;
   distance?: number;
+  date?: string;
+  time?: string;
 }
 
 interface Tariff {
@@ -41,6 +43,7 @@ const Index = () => {
   const [activeSection, setActiveSection] = useState<string>('order');
   const [selectedTariff, setSelectedTariff] = useState<TariffType>('economy');
   const [estimatedPrice, setEstimatedPrice] = useState<number | null>(null);
+  const [orderHistory, setOrderHistory] = useState<Order[]>([]);
 
   const tariffs: Tariff[] = [
     {
@@ -99,6 +102,7 @@ const Index = () => {
     const randomDistance = Math.floor(Math.random() * 20) + 3;
     const calculatedPrice = calculatePrice(randomDistance, selectedTariff);
 
+    const now = new Date();
     const newOrder: Order = {
       id: Date.now().toString(),
       from,
@@ -107,6 +111,8 @@ const Index = () => {
       tariff: selectedTariff,
       price: calculatedPrice,
       distance: randomDistance,
+      date: now.toLocaleDateString('ru-RU'),
+      time: now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }),
     };
 
     setCurrentOrder(newOrder);
@@ -126,6 +132,10 @@ const Index = () => {
         arrivalTime: 5,
       };
       setCurrentOrder(updatedOrder);
+      
+      const completedOrder = { ...updatedOrder, status: 'completed' as OrderStatus };
+      setOrderHistory([completedOrder, ...orderHistory]);
+      
       toast({
         title: '✅ Водитель найден!',
         description: `${updatedOrder.driverName} • ${updatedOrder.carNumber}`,
@@ -138,12 +148,13 @@ const Index = () => {
     if (order) {
       const acceptedOrder = {
         ...order,
-        status: 'accepted' as OrderStatus,
+        status: 'completed' as OrderStatus,
         driverName: 'Вы',
         carNumber: 'В555ВВ555',
         arrivalTime: 3,
       };
       setIncomingOrders(incomingOrders.filter((o) => o.id !== orderId));
+      setOrderHistory([acceptedOrder, ...orderHistory]);
       toast({
         title: '✅ Заказ принят',
         description: `${order.from} → ${order.to}`,
@@ -354,6 +365,67 @@ const Index = () => {
               </Card>
             )}
 
+            {activeSection === 'history' && (
+              <Card className="shadow-lg border-2 border-primary/30 animate-slide-up">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-primary">
+                    <Icon name="History" size={24} />
+                    История поездок
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {orderHistory.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <Icon name="FileText" size={48} className="mx-auto mb-2 opacity-50" />
+                      <p>Пока нет завершённых поездок</p>
+                    </div>
+                  ) : (
+                    orderHistory.map((order) => (
+                      <Card key={order.id} className="bg-gradient-to-br from-primary/5 to-accent/5">
+                        <CardContent className="pt-4 space-y-3">
+                          <div className="flex items-start justify-between">
+                            <div className="space-y-1 flex-1">
+                              <div className="flex items-center gap-2">
+                                <Icon name="Calendar" size={14} className="text-muted-foreground" />
+                                <span className="text-xs text-muted-foreground">{order.date}</span>
+                                <Icon name="Clock" size={14} className="text-muted-foreground" />
+                                <span className="text-xs text-muted-foreground">{order.time}</span>
+                              </div>
+                              <div className="space-y-1.5 mt-2">
+                                <div className="flex items-start gap-2">
+                                  <Icon name="Navigation" size={14} className="text-accent mt-0.5" />
+                                  <p className="text-sm font-medium">{order.from}</p>
+                                </div>
+                                <div className="flex items-start gap-2">
+                                  <Icon name="MapPinned" size={14} className="text-secondary mt-0.5" />
+                                  <p className="text-sm font-medium">{order.to}</p>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-between pt-2 border-t">
+                            <div className="flex items-center gap-2">
+                              <Icon name={tariffs.find(t => t.id === order.tariff)?.icon as any} size={16} className="text-primary" />
+                              <span className="text-xs font-medium">{tariffs.find(t => t.id === order.tariff)?.name}</span>
+                              <span className="text-xs text-muted-foreground">• {order.distance} км</span>
+                            </div>
+                            <span className="text-lg font-bold text-primary">{order.price}₽</span>
+                          </div>
+                          {order.driverName && (
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                              <Icon name="User" size={14} />
+                              <span>{order.driverName}</span>
+                              {order.carNumber && <span>• {order.carNumber}</span>}
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    ))
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
             <Card className="shadow-lg">
               <CardHeader>
                 <CardTitle className="text-lg">Меню</CardTitle>
@@ -450,6 +522,60 @@ const Index = () => {
                 )}
               </CardContent>
             </Card>
+
+            {activeSection === 'history' && (
+              <Card className="shadow-lg border-2 border-secondary/30 animate-slide-up">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-secondary">
+                    <Icon name="History" size={24} />
+                    История заказов
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {orderHistory.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <Icon name="FileText" size={48} className="mx-auto mb-2 opacity-50" />
+                      <p>Пока нет завершённых заказов</p>
+                    </div>
+                  ) : (
+                    orderHistory.map((order) => (
+                      <Card key={order.id} className="bg-gradient-to-br from-secondary/5 to-accent/5">
+                        <CardContent className="pt-4 space-y-3">
+                          <div className="flex items-start justify-between">
+                            <div className="space-y-1 flex-1">
+                              <div className="flex items-center gap-2">
+                                <Icon name="Calendar" size={14} className="text-muted-foreground" />
+                                <span className="text-xs text-muted-foreground">{order.date}</span>
+                                <Icon name="Clock" size={14} className="text-muted-foreground" />
+                                <span className="text-xs text-muted-foreground">{order.time}</span>
+                              </div>
+                              <div className="space-y-1.5 mt-2">
+                                <div className="flex items-start gap-2">
+                                  <Icon name="Navigation" size={14} className="text-accent mt-0.5" />
+                                  <p className="text-sm font-medium">{order.from}</p>
+                                </div>
+                                <div className="flex items-start gap-2">
+                                  <Icon name="MapPinned" size={14} className="text-secondary mt-0.5" />
+                                  <p className="text-sm font-medium">{order.to}</p>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-between pt-2 border-t">
+                            <div className="flex items-center gap-2">
+                              <Icon name={tariffs.find(t => t.id === order.tariff)?.icon as any} size={16} className="text-secondary" />
+                              <span className="text-xs font-medium">{tariffs.find(t => t.id === order.tariff)?.name}</span>
+                              <span className="text-xs text-muted-foreground">• {order.distance} км</span>
+                            </div>
+                            <span className="text-lg font-bold text-secondary">{order.price}₽</span>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))
+                  )}
+                </CardContent>
+              </Card>
+            )}
 
             <Card className="shadow-lg">
               <CardHeader>
