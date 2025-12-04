@@ -87,6 +87,30 @@ const Index = () => {
     return selectedTariffData.basePrice + (distance * selectedTariffData.perKm);
   };
 
+  const calculateStats = () => {
+    const totalTrips = orderHistory.length;
+    const totalSpent = orderHistory.reduce((sum, order) => sum + (order.price || 0), 0);
+    const totalDistance = orderHistory.reduce((sum, order) => sum + (order.distance || 0), 0);
+    const averageRating = orderHistory.filter(o => o.rating).length > 0
+      ? (orderHistory.reduce((sum, order) => sum + (order.rating || 0), 0) / orderHistory.filter(o => o.rating).length).toFixed(1)
+      : '0';
+    const bonusPoints = Math.floor(totalSpent / 10);
+    const level = Math.floor(totalTrips / 5) + 1;
+    const tripsToNextLevel = 5 - (totalTrips % 5);
+    
+    return {
+      totalTrips,
+      totalSpent,
+      totalDistance,
+      averageRating,
+      bonusPoints,
+      level,
+      tripsToNextLevel,
+    };
+  };
+
+  const stats = calculateStats();
+
   const calculateEstimate = () => {
     if (!from || !to) return;
     const randomDistance = Math.floor(Math.random() * 20) + 3;
@@ -497,6 +521,122 @@ const Index = () => {
                       </Card>
                     ))
                   )}
+                </CardContent>
+              </Card>
+            )}
+
+            {activeSection === 'profile' && (
+              <Card className="shadow-lg border-2 border-primary/30 animate-slide-up">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-primary">
+                    <Icon name="User" size={24} />
+                    Мой профиль
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center gap-4">
+                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center text-white text-2xl font-bold">
+                      А
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="text-xl font-bold">Алексей Иванов</h3>
+                      <p className="text-sm text-muted-foreground">+7 (999) 123-45-67</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <Badge className="bg-gradient-to-r from-primary to-accent">
+                          <Icon name="Award" size={14} className="mr-1" />
+                          Уровень {stats.level}
+                        </Badge>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-gradient-to-br from-primary/10 to-accent/10 rounded-xl p-4 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">Прогресс до уровня {stats.level + 1}</span>
+                      <span className="text-xs text-muted-foreground">{stats.tripsToNextLevel} поездок осталось</span>
+                    </div>
+                    <div className="w-full bg-muted rounded-full h-2">
+                      <div 
+                        className="bg-gradient-to-r from-primary to-accent h-2 rounded-full transition-all"
+                        style={{ width: `${((5 - stats.tripsToNextLevel) / 5) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <Card className="bg-gradient-to-br from-primary/5 to-primary/10">
+                      <CardContent className="pt-4 text-center">
+                        <Icon name="MapPin" size={32} className="mx-auto mb-2 text-primary" />
+                        <p className="text-2xl font-bold text-primary">{stats.totalTrips}</p>
+                        <p className="text-xs text-muted-foreground">Поездок</p>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="bg-gradient-to-br from-accent/5 to-accent/10">
+                      <CardContent className="pt-4 text-center">
+                        <Icon name="Navigation" size={32} className="mx-auto mb-2 text-accent" />
+                        <p className="text-2xl font-bold text-accent">{stats.totalDistance}</p>
+                        <p className="text-xs text-muted-foreground">Километров</p>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="bg-gradient-to-br from-secondary/5 to-secondary/10">
+                      <CardContent className="pt-4 text-center">
+                        <Icon name="Wallet" size={32} className="mx-auto mb-2 text-secondary" />
+                        <p className="text-2xl font-bold text-secondary">{stats.totalSpent}₽</p>
+                        <p className="text-xs text-muted-foreground">Потрачено</p>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="bg-gradient-to-br from-yellow-500/5 to-yellow-500/10">
+                      <CardContent className="pt-4 text-center">
+                        <Icon name="Star" size={32} className="mx-auto mb-2 text-yellow-500" />
+                        <p className="text-2xl font-bold text-yellow-500">{stats.averageRating}</p>
+                        <p className="text-xs text-muted-foreground">Средний рейтинг</p>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  <Card className="bg-gradient-to-r from-primary/20 via-accent/20 to-secondary/20 border-2 border-primary">
+                    <CardContent className="pt-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Icon name="Gift" size={24} className="text-primary" />
+                          <div>
+                            <p className="font-semibold">Бонусные баллы</p>
+                            <p className="text-xs text-muted-foreground">1 балл = 1₽ скидки</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-3xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+                            {stats.bonusPoints}
+                          </p>
+                          <p className="text-xs text-muted-foreground">баллов</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <div className="space-y-2">
+                    <h4 className="font-semibold flex items-center gap-2">
+                      <Icon name="Trophy" size={18} className="text-primary" />
+                      Достижения
+                    </h4>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className={`p-3 rounded-lg text-center ${stats.totalTrips >= 1 ? 'bg-primary/20 border-2 border-primary' : 'bg-muted/50 opacity-50'}`}>
+                        <Icon name="Medal" size={24} className={`mx-auto ${stats.totalTrips >= 1 ? 'text-primary' : 'text-muted-foreground'}`} />
+                        <p className="text-xs mt-1 font-medium">Первая поездка</p>
+                      </div>
+                      <div className={`p-3 rounded-lg text-center ${stats.totalTrips >= 10 ? 'bg-accent/20 border-2 border-accent' : 'bg-muted/50 opacity-50'}`}>
+                        <Icon name="Flame" size={24} className={`mx-auto ${stats.totalTrips >= 10 ? 'text-accent' : 'text-muted-foreground'}`} />
+                        <p className="text-xs mt-1 font-medium">10 поездок</p>
+                      </div>
+                      <div className={`p-3 rounded-lg text-center ${stats.totalDistance >= 100 ? 'bg-secondary/20 border-2 border-secondary' : 'bg-muted/50 opacity-50'}`}>
+                        <Icon name="Target" size={24} className={`mx-auto ${stats.totalDistance >= 100 ? 'text-secondary' : 'text-muted-foreground'}`} />
+                        <p className="text-xs mt-1 font-medium">100+ км</p>
+                      </div>
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
             )}
