@@ -13,12 +13,20 @@ type UserRole = 'passenger' | 'driver';
 type OrderStatus = 'searching' | 'found' | 'accepted' | 'completed';
 type TariffType = 'economy' | 'comfort' | 'business';
 type PaymentMethod = 'card' | 'cash' | 'qr';
+type SubscriptionStatus = 'trial' | 'active' | 'expired' | 'none';
 
 interface ChatMessage {
   id: string;
   sender: 'user' | 'driver';
   text: string;
   time: string;
+}
+
+interface DriverSubscription {
+  status: SubscriptionStatus;
+  trialEndsAt?: Date;
+  subscriptionEndsAt?: Date;
+  isTrialUsed: boolean;
 }
 
 interface Order {
@@ -77,6 +85,17 @@ const Index = () => {
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethod>('card');
   const [selectedOrderForPayment, setSelectedOrderForPayment] = useState<Order | null>(null);
   const [qrCodeGenerated, setQrCodeGenerated] = useState(false);
+  const [subscriptionDialogOpen, setSubscriptionDialogOpen] = useState(false);
+  const [driverSubscription, setDriverSubscription] = useState<DriverSubscription>({
+    status: 'none',
+    isTrialUsed: false
+  });
+  
+  useEffect(() => {
+    if (role === 'driver' && driverSubscription.status === 'none') {
+      setTimeout(() => setSubscriptionDialogOpen(true), 1000);
+    }
+  }, [role, driverSubscription.status]);
 
   const tariffs: Tariff[] = [
     {
@@ -362,6 +381,53 @@ const Index = () => {
     });
   };
 
+  const startTrial = () => {
+    const trialEnd = new Date();
+    trialEnd.setDate(trialEnd.getDate() + 7);
+    
+    setDriverSubscription({
+      status: 'trial',
+      trialEndsAt: trialEnd,
+      isTrialUsed: true
+    });
+    
+    setSubscriptionDialogOpen(false);
+    
+    toast({
+      title: '🎉 Пробный период активирован!',
+      description: '7 дней за 1₽ • До ' + trialEnd.toLocaleDateString('ru-RU'),
+    });
+  };
+
+  const activateSubscription = () => {
+    const subscriptionEnd = new Date();
+    subscriptionEnd.setMonth(subscriptionEnd.getMonth() + 1);
+    
+    setDriverSubscription({
+      status: 'active',
+      subscriptionEndsAt: subscriptionEnd,
+      isTrialUsed: driverSubscription.isTrialUsed
+    });
+    
+    setSubscriptionDialogOpen(false);
+    
+    toast({
+      title: '✅ Подписка оформлена!',
+      description: 'Активна до ' + subscriptionEnd.toLocaleDateString('ru-RU'),
+    });
+  };
+
+  const getRemainingDays = () => {
+    const targetDate = driverSubscription.status === 'trial' 
+      ? driverSubscription.trialEndsAt 
+      : driverSubscription.subscriptionEndsAt;
+    
+    if (!targetDate) return 0;
+    
+    const diff = targetDate.getTime() - new Date().getTime();
+    return Math.ceil(diff / (1000 * 60 * 60 * 24));
+  };
+
   const sendMessage = () => {
     if (!newMessage.trim()) return;
     
@@ -421,7 +487,7 @@ const Index = () => {
       <div className="max-w-lg mx-auto p-4 space-y-4">
         <div className="pt-6 pb-4 animate-fade-in">
           <h1 className="text-4xl font-bold text-center bg-gradient-to-r from-primary via-secondary to-accent bg-clip-text text-transparent">
-            TaxiGo
+            ЮGo
           </h1>
           <p className="text-center text-muted-foreground mt-2">
             Быстрое такси в один клик
@@ -1301,6 +1367,37 @@ const Index = () => {
 
         {role === 'driver' && (
           <div className="space-y-4 animate-fade-in">
+            {(driverSubscription.status === 'trial' || driverSubscription.status === 'active') && (
+              <Card className="shadow-lg border-2 border-accent bg-gradient-to-r from-accent/5 to-secondary/5">
+                <CardContent className="pt-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-accent to-secondary flex items-center justify-center">
+                        <Icon name="Crown" size={24} className="text-white" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold">
+                          {driverSubscription.status === 'trial' ? '🎉 Пробный период' : '✅ Подписка активна'}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Осталось {getRemainingDays()} дней
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      onClick={() => setSubscriptionDialogOpen(true)}
+                      variant="outline"
+                      size="sm"
+                      className="border-accent text-accent hover:bg-accent hover:text-white"
+                    >
+                      <Icon name="Settings" size={16} className="mr-1" />
+                      Управление
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+            
             <Card className="shadow-lg border-2 border-secondary">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-secondary">
@@ -1429,7 +1526,13 @@ const Index = () => {
                   {menuItems.slice(1).map((item) => (
                     <button
                       key={item.id}
-                      onClick={() => setActiveSection(item.id)}
+                      onClick={() => {
+                        if (item.id === 'profile') {
+                          setSubscriptionDialogOpen(true);
+                        } else {
+                          setActiveSection(item.id);
+                        }
+                      }}
                       className={`flex flex-col items-center gap-2 p-4 rounded-xl transition-all hover:scale-105 ${
                         activeSection === item.id
                           ? 'bg-gradient-to-br from-secondary/20 to-accent/20 border-2 border-secondary'
@@ -1449,6 +1552,183 @@ const Index = () => {
             </Card>
           </div>
         )}
+
+        <Dialog open={subscriptionDialogOpen} onOpenChange={setSubscriptionDialogOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Icon name="Crown" size={24} className="text-accent" />
+                Подписка ЮGo для водителей
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 pt-4">
+              {driverSubscription.status === 'none' && (
+                <>
+                  <div className="bg-gradient-to-br from-accent/10 to-secondary/10 rounded-xl p-6 text-center space-y-2">
+                    <Icon name="Sparkles" size={48} className="mx-auto text-accent" />
+                    <h3 className="text-2xl font-bold">Начните работать с ЮGo</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Получайте заказы и зарабатывайте вместе с нами
+                    </p>
+                  </div>
+
+                  <Card className="border-2 border-accent bg-gradient-to-br from-accent/5 to-transparent">
+                    <CardContent className="pt-6 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="font-bold text-lg">🎉 Пробный период</h4>
+                          <p className="text-xs text-muted-foreground">7 дней доступа</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-3xl font-bold text-accent">1₽</p>
+                          <p className="text-xs text-muted-foreground">на 7 дней</p>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 text-sm">
+                          <Icon name="Check" size={16} className="text-green-600" />
+                          <span>Неограниченное количество заказов</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-sm">
+                          <Icon name="Check" size={16} className="text-green-600" />
+                          <span>Приоритетная поддержка</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-sm">
+                          <Icon name="Check" size={16} className="text-green-600" />
+                          <span>Доступ ко всем функциям</span>
+                        </div>
+                      </div>
+                      <Button
+                        onClick={startTrial}
+                        className="w-full bg-gradient-to-r from-accent to-secondary text-lg py-6"
+                      >
+                        <Icon name="Zap" className="mr-2" size={20} />
+                        Начать за 1₽
+                      </Button>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="border-2">
+                    <CardContent className="pt-6 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="font-bold text-lg">💪 Полная подписка</h4>
+                          <p className="text-xs text-muted-foreground">Ежемесячное продление</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-3xl font-bold text-primary">1000₽</p>
+                          <p className="text-xs text-muted-foreground">в месяц</p>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 text-sm">
+                          <Icon name="Check" size={16} className="text-green-600" />
+                          <span>Все преимущества пробного периода</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-sm">
+                          <Icon name="Check" size={16} className="text-green-600" />
+                          <span>Без комиссий с заказов</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-sm">
+                          <Icon name="Check" size={16} className="text-green-600" />
+                          <span>Бонусные баллы</span>
+                        </div>
+                      </div>
+                      <Button
+                        onClick={activateSubscription}
+                        variant="outline"
+                        className="w-full text-lg py-6"
+                      >
+                        <Icon name="CreditCard" className="mr-2" size={20} />
+                        Оформить за 1000₽
+                      </Button>
+                    </CardContent>
+                  </Card>
+                </>
+              )}
+
+              {driverSubscription.status === 'trial' && (
+                <>
+                  <div className="bg-gradient-to-br from-accent/10 to-secondary/10 rounded-xl p-6 text-center space-y-2">
+                    <Icon name="Clock" size={48} className="mx-auto text-accent" />
+                    <h3 className="text-2xl font-bold">🎉 Пробный период</h3>
+                    <p className="text-lg font-bold text-accent">Осталось {getRemainingDays()} дней</p>
+                    <p className="text-xs text-muted-foreground">
+                      Активно до {driverSubscription.trialEndsAt?.toLocaleDateString('ru-RU')}
+                    </p>
+                  </div>
+
+                  <Card className="border-2 border-primary">
+                    <CardContent className="pt-6 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="font-bold text-lg">🚀 Перейти на полную подписку</h4>
+                          <p className="text-xs text-muted-foreground">Продолжайте работать без ограничений</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-3xl font-bold text-primary">1000₽</p>
+                          <p className="text-xs text-muted-foreground">в месяц</p>
+                        </div>
+                      </div>
+                      <Button
+                        onClick={activateSubscription}
+                        className="w-full bg-gradient-to-r from-primary to-accent text-lg py-6"
+                      >
+                        <Icon name="Crown" className="mr-2" size={20} />
+                        Оформить подписку
+                      </Button>
+                    </CardContent>
+                  </Card>
+                </>
+              )}
+
+              {driverSubscription.status === 'active' && (
+                <>
+                  <div className="bg-gradient-to-br from-green-500/10 to-green-600/10 rounded-xl p-6 text-center space-y-2">
+                    <Icon name="CheckCircle2" size={48} className="mx-auto text-green-600" />
+                    <h3 className="text-2xl font-bold">✅ Подписка активна</h3>
+                    <p className="text-lg font-bold text-green-600">Осталось {getRemainingDays()} дней</p>
+                    <p className="text-xs text-muted-foreground">
+                      Автопродление {driverSubscription.subscriptionEndsAt?.toLocaleDateString('ru-RU')}
+                    </p>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <Icon name="CreditCard" size={20} className="text-muted-foreground" />
+                        <div>
+                          <p className="text-sm font-medium">Стоимость</p>
+                          <p className="text-xs text-muted-foreground">1000₽ в месяц</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <Icon name="Calendar" size={20} className="text-muted-foreground" />
+                        <div>
+                          <p className="text-sm font-medium">Следующий платёж</p>
+                          <p className="text-xs text-muted-foreground">
+                            {driverSubscription.subscriptionEndsAt?.toLocaleDateString('ru-RU')}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <Button
+                      variant="outline"
+                      className="w-full text-red-600 border-red-600 hover:bg-red-600 hover:text-white"
+                    >
+                      <Icon name="XCircle" className="mr-2" size={16} />
+                      Отменить подписку
+                    </Button>
+                  </div>
+                </>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );
