@@ -29,6 +29,14 @@ interface DriverSubscription {
   isTrialUsed: boolean;
 }
 
+interface Referral {
+  id: string;
+  name: string;
+  status: 'pending' | 'active';
+  bonus: number;
+  date: string;
+}
+
 interface Order {
   id: string;
   from: string;
@@ -86,6 +94,15 @@ const Index = () => {
   const [selectedOrderForPayment, setSelectedOrderForPayment] = useState<Order | null>(null);
   const [qrCodeGenerated, setQrCodeGenerated] = useState(false);
   const [subscriptionDialogOpen, setSubscriptionDialogOpen] = useState(false);
+  const [referralDialogOpen, setReferralDialogOpen] = useState(false);
+  const [referralCode, setReferralCode] = useState('YUGO-DRV-12345');
+  const [referrals, setReferrals] = useState<Referral[]>([
+    { id: '1', name: 'Иван П.', status: 'active', bonus: 500, date: '10.11.2024' },
+    { id: '2', name: 'Мария С.', status: 'active', bonus: 500, date: '15.11.2024' },
+    { id: '3', name: 'Дмитрий К.', status: 'pending', bonus: 0, date: '01.12.2024' },
+  ]);
+  const [totalReferralBonus, setTotalReferralBonus] = useState(1000);
+  const [copiedCode, setCopiedCode] = useState(false);
   const [driverSubscription, setDriverSubscription] = useState<DriverSubscription>({
     status: 'none',
     isTrialUsed: false
@@ -428,6 +445,29 @@ const Index = () => {
     return Math.ceil(diff / (1000 * 60 * 60 * 24));
   };
 
+  const copyReferralCode = () => {
+    navigator.clipboard.writeText(referralCode);
+    setCopiedCode(true);
+    toast({
+      title: '📋 Код скопирован!',
+      description: 'Реферальный код скопирован в буфер обмена',
+    });
+    setTimeout(() => setCopiedCode(false), 2000);
+  };
+
+  const shareReferralCode = () => {
+    const message = `Присоединяйся к ЮGo и начни зарабатывать! Используй мой реферальный код: ${referralCode}\n\nПолучи 7 дней за 1₽!`;
+    
+    if (navigator.share) {
+      navigator.share({
+        title: 'ЮGo — реферальный код',
+        text: message,
+      });
+    } else {
+      copyReferralCode();
+    }
+  };
+
   const sendMessage = () => {
     if (!newMessage.trim()) return;
     
@@ -477,9 +517,9 @@ const Index = () => {
     { id: 'order', label: 'Заказ', icon: 'Car' },
     { id: 'history', label: 'История', icon: 'History' },
     { id: 'profile', label: 'Профиль', icon: 'User' },
+    { id: 'referral', label: 'Рефералы', icon: 'Users' },
     { id: 'support', label: 'Поддержка', icon: 'MessageCircle' },
     { id: 'tariff', label: 'Тариф', icon: 'DollarSign' },
-    { id: 'promo', label: 'Промокод', icon: 'Tag' },
   ];
 
   return (
@@ -1529,6 +1569,8 @@ const Index = () => {
                       onClick={() => {
                         if (item.id === 'profile') {
                           setSubscriptionDialogOpen(true);
+                        } else if (item.id === 'referral') {
+                          setReferralDialogOpen(true);
                         } else {
                           setActiveSection(item.id);
                         }
@@ -1726,6 +1768,145 @@ const Index = () => {
                   </div>
                 </>
               )}
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={referralDialogOpen} onOpenChange={setReferralDialogOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Icon name="Users" size={24} className="text-accent" />
+                Реферальная программа
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 pt-4">
+              <div className="bg-gradient-to-br from-accent/10 to-secondary/10 rounded-xl p-6 text-center space-y-3">
+                <Icon name="Gift" size={48} className="mx-auto text-accent" />
+                <h3 className="text-2xl font-bold">🎁 Приглашай и зарабатывай</h3>
+                <p className="text-sm text-muted-foreground">
+                  Получай 500₽ за каждого водителя, который оформит подписку по твоей ссылке
+                </p>
+              </div>
+
+              <Card className="border-2 border-accent bg-white">
+                <CardContent className="pt-6 space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-muted-foreground">Твой реферальный код</label>
+                    <div className="flex gap-2">
+                      <Input
+                        value={referralCode}
+                        readOnly
+                        className="text-center font-mono font-bold text-lg"
+                      />
+                      <Button
+                        onClick={copyReferralCode}
+                        variant="outline"
+                        className="shrink-0"
+                      >
+                        <Icon name={copiedCode ? "Check" : "Copy"} size={18} />
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={shareReferralCode}
+                      className="flex-1 bg-gradient-to-r from-accent to-secondary"
+                    >
+                      <Icon name="Share2" className="mr-2" size={18} />
+                      Поделиться
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-gradient-to-br from-green-500/10 to-green-600/10 border-2 border-green-500/30">
+                <CardContent className="pt-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Всего заработано</p>
+                      <p className="text-3xl font-bold text-green-600">{totalReferralBonus}₽</p>
+                    </div>
+                    <Icon name="TrendingUp" size={48} className="text-green-600/30" />
+                  </div>
+                  <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+                    <Icon name="Users" size={14} />
+                    <span>Приглашено: {referrals.length} водителей</span>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-sm">Твои рефералы</h4>
+                  <Badge className="bg-accent">{referrals.filter(r => r.status === 'active').length} активных</Badge>
+                </div>
+                
+                <ScrollArea className="h-[240px] rounded-lg border">
+                  <div className="space-y-2 p-3">
+                    {referrals.length === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <Icon name="UserPlus" size={32} className="mx-auto mb-2 opacity-50" />
+                        <p className="text-sm">Пригласи первого водителя</p>
+                      </div>
+                    ) : (
+                      referrals.map((referral) => (
+                        <Card key={referral.id} className="bg-muted/30">
+                          <CardContent className="p-3">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-accent to-secondary flex items-center justify-center text-white font-bold">
+                                  {referral.name.charAt(0)}
+                                </div>
+                                <div>
+                                  <p className="font-medium text-sm">{referral.name}</p>
+                                  <p className="text-xs text-muted-foreground">{referral.date}</p>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                {referral.status === 'active' ? (
+                                  <>
+                                    <p className="text-lg font-bold text-green-600">+{referral.bonus}₽</p>
+                                    <Badge className="bg-green-500 text-white text-xs mt-1">
+                                      <Icon name="CheckCircle2" size={10} className="mr-1" />
+                                      Активен
+                                    </Badge>
+                                  </>
+                                ) : (
+                                  <Badge variant="outline" className="text-xs">
+                                    <Icon name="Clock" size={10} className="mr-1" />
+                                    Ожидание
+                                  </Badge>
+                                )}
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))
+                    )}
+                  </div>
+                </ScrollArea>
+              </div>
+
+              <Card className="bg-gradient-to-r from-accent/5 to-secondary/5 border-2 border-accent/30">
+                <CardContent className="pt-4">
+                  <div className="space-y-2 text-sm">
+                    <div className="flex items-start gap-2">
+                      <Icon name="Info" size={16} className="text-accent mt-0.5 shrink-0" />
+                      <div className="space-y-1">
+                        <p className="font-medium">Как это работает?</p>
+                        <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside">
+                          <li>Поделись своим кодом с друзьями</li>
+                          <li>Они регистрируются и оформляют подписку</li>
+                          <li>Ты получаешь 500₽ за каждого</li>
+                          <li>Бонусы можно использовать для оплаты подписки</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
           </DialogContent>
         </Dialog>
