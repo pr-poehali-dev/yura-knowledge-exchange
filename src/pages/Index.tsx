@@ -3,6 +3,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Textarea } from '@/components/ui/textarea';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import Icon from '@/components/ui/icon';
 import { toast } from '@/hooks/use-toast';
 
@@ -23,6 +25,9 @@ interface Order {
   distance?: number;
   date?: string;
   time?: string;
+  rating?: number;
+  review?: string;
+  driverRating?: number;
 }
 
 interface Tariff {
@@ -38,6 +43,10 @@ const Index = () => {
   const [role, setRole] = useState<UserRole>('passenger');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
+  const [ratingDialogOpen, setRatingDialogOpen] = useState(false);
+  const [selectedOrderForRating, setSelectedOrderForRating] = useState<Order | null>(null);
+  const [tempRating, setTempRating] = useState(0);
+  const [tempReview, setTempReview] = useState('');
   const [currentOrder, setCurrentOrder] = useState<Order | null>(null);
   const [incomingOrders, setIncomingOrders] = useState<Order[]>([]);
   const [activeSection, setActiveSection] = useState<string>('order');
@@ -124,12 +133,14 @@ const Index = () => {
     });
 
     setTimeout(() => {
+      const driverRating = (Math.random() * 2 + 3).toFixed(1);
       const updatedOrder = {
         ...newOrder,
         status: 'found' as OrderStatus,
         driverName: 'Иван Петров',
         carNumber: 'А777АА777',
         arrivalTime: 5,
+        driverRating: parseFloat(driverRating),
       };
       setCurrentOrder(updatedOrder);
       
@@ -167,6 +178,31 @@ const Index = () => {
     toast({
       title: 'Заказ отклонён',
       variant: 'destructive',
+    });
+  };
+
+  const openRatingDialog = (order: Order) => {
+    setSelectedOrderForRating(order);
+    setTempRating(order.rating || 0);
+    setTempReview(order.review || '');
+    setRatingDialogOpen(true);
+  };
+
+  const submitRating = () => {
+    if (!selectedOrderForRating) return;
+    
+    const updatedHistory = orderHistory.map(order => 
+      order.id === selectedOrderForRating.id 
+        ? { ...order, rating: tempRating, review: tempReview }
+        : order
+    );
+    
+    setOrderHistory(updatedHistory);
+    setRatingDialogOpen(false);
+    
+    toast({
+      title: '⭐ Спасибо за отзыв!',
+      description: `Вы оценили поездку на ${tempRating} звёзд`,
     });
   };
 
@@ -334,7 +370,11 @@ const Index = () => {
                       </div>
                       <div>
                         <p className="font-semibold text-lg">{currentOrder.driverName}</p>
-                        <p className="text-muted-foreground">{currentOrder.carNumber}</p>
+                        <div className="flex items-center gap-1">
+                          <Icon name="Star" size={14} className="text-yellow-500 fill-yellow-500" />
+                          <span className="text-sm font-medium">{currentOrder.driverRating}</span>
+                          <span className="text-xs text-muted-foreground ml-1">• {currentOrder.carNumber}</span>
+                        </div>
                       </div>
                     </div>
                     <Badge className="bg-accent text-white px-4 py-2 text-base">
@@ -412,11 +452,46 @@ const Index = () => {
                             <span className="text-lg font-bold text-primary">{order.price}₽</span>
                           </div>
                           {order.driverName && (
-                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                              <Icon name="User" size={14} />
-                              <span>{order.driverName}</span>
-                              {order.carNumber && <span>• {order.carNumber}</span>}
+                            <div className="flex items-center justify-between text-xs">
+                              <div className="flex items-center gap-2 text-muted-foreground">
+                                <Icon name="User" size={14} />
+                                <span>{order.driverName}</span>
+                                {order.carNumber && <span>• {order.carNumber}</span>}
+                                {order.driverRating && (
+                                  <div className="flex items-center gap-1">
+                                    <Icon name="Star" size={12} className="text-yellow-500 fill-yellow-500" />
+                                    <span>{order.driverRating}</span>
+                                  </div>
+                                )}
+                              </div>
                             </div>
+                          )}
+                          {order.rating ? (
+                            <div className="pt-2 border-t">
+                              <div className="flex items-center gap-1 mb-1">
+                                {[1, 2, 3, 4, 5].map((star) => (
+                                  <Icon
+                                    key={star}
+                                    name="Star"
+                                    size={16}
+                                    className={star <= order.rating! ? 'text-yellow-500 fill-yellow-500' : 'text-gray-300'}
+                                  />
+                                ))}
+                              </div>
+                              {order.review && (
+                                <p className="text-xs text-muted-foreground italic">{order.review}</p>
+                              )}
+                            </div>
+                          ) : (
+                            <Button
+                              onClick={() => openRatingDialog(order)}
+                              variant="outline"
+                              size="sm"
+                              className="w-full mt-2"
+                            >
+                              <Icon name="Star" className="mr-2" size={14} />
+                              Оценить поездку
+                            </Button>
                           )}
                         </CardContent>
                       </Card>
@@ -455,6 +530,76 @@ const Index = () => {
             </Card>
           </div>
         )}
+
+        <Dialog open={ratingDialogOpen} onOpenChange={setRatingDialogOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Icon name="Star" size={24} className="text-yellow-500" />
+                Оценить поездку
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 pt-4">
+              {selectedOrderForRating && (
+                <>
+                  <div className="space-y-2">
+                    <div className="text-sm text-muted-foreground">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Icon name="Navigation" size={14} />
+                        <span>{selectedOrderForRating.from}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Icon name="MapPinned" size={14} />
+                        <span>{selectedOrderForRating.to}</span>
+                      </div>
+                    </div>
+                    <div className="text-sm font-medium">
+                      Водитель: {selectedOrderForRating.driverName} • {selectedOrderForRating.carNumber}
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Ваша оценка</label>
+                    <div className="flex gap-2 justify-center">
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <button
+                          key={star}
+                          onClick={() => setTempRating(star)}
+                          className="transition-transform hover:scale-110"
+                        >
+                          <Icon
+                            name="Star"
+                            size={40}
+                            className={star <= tempRating ? 'text-yellow-500 fill-yellow-500' : 'text-gray-300'}
+                          />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Комментарий (необязательно)</label>
+                    <Textarea
+                      placeholder="Поделитесь впечатлениями о поездке..."
+                      value={tempReview}
+                      onChange={(e) => setTempReview(e.target.value)}
+                      rows={3}
+                    />
+                  </div>
+
+                  <Button
+                    onClick={submitRating}
+                    disabled={tempRating === 0}
+                    className="w-full"
+                  >
+                    <Icon name="Send" className="mr-2" size={18} />
+                    Отправить отзыв
+                  </Button>
+                </>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {role === 'driver' && (
           <div className="space-y-4 animate-fade-in">
