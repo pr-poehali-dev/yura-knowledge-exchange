@@ -4,13 +4,21 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import Icon from '@/components/ui/icon';
 import { toast } from '@/hooks/use-toast';
 
 type UserRole = 'passenger' | 'driver';
 type OrderStatus = 'searching' | 'found' | 'accepted' | 'completed';
 type TariffType = 'economy' | 'comfort' | 'business';
+
+interface ChatMessage {
+  id: string;
+  sender: 'user' | 'driver';
+  text: string;
+  time: string;
+}
 
 interface Order {
   id: string;
@@ -52,6 +60,10 @@ const Index = () => {
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [trackingDriver, setTrackingDriver] = useState(false);
   const driverMoveInterval = useRef<NodeJS.Timeout | null>(null);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [newMessage, setNewMessage] = useState('');
+  const chatScrollRef = useRef<HTMLDivElement>(null);
   const [currentOrder, setCurrentOrder] = useState<Order | null>(null);
   const [incomingOrders, setIncomingOrders] = useState<Order[]>([]);
   const [activeSection, setActiveSection] = useState<string>('order');
@@ -301,6 +313,51 @@ const Index = () => {
       description: `Вы оценили поездку на ${tempRating} звёзд`,
     });
   };
+
+  const sendMessage = () => {
+    if (!newMessage.trim()) return;
+    
+    const message: ChatMessage = {
+      id: Date.now().toString(),
+      sender: 'user',
+      text: newMessage,
+      time: new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }),
+    };
+    
+    setMessages([...messages, message]);
+    setNewMessage('');
+    
+    setTimeout(() => {
+      const driverResponse: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        sender: 'driver',
+        text: getDriverResponse(newMessage),
+        time: new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }),
+      };
+      setMessages(prev => [...prev, driverResponse]);
+    }, 1500);
+  };
+
+  const getDriverResponse = (userMessage: string): string => {
+    const lowerMsg = userMessage.toLowerCase();
+    if (lowerMsg.includes('где') || lowerMsg.includes('когда')) {
+      return 'Уже еду к вам, буду через 3-5 минут! 🚗';
+    } else if (lowerMsg.includes('багаж') || lowerMsg.includes('чемодан')) {
+      return 'Да, конечно! Багажник свободен 👍';
+    } else if (lowerMsg.includes('подожд') || lowerMsg.includes('задерж')) {
+      return 'Хорошо, подожду. Не торопитесь!';
+    } else if (lowerMsg.includes('спасибо') || lowerMsg.includes('благодар')) {
+      return 'Всегда пожалуйста! Хорошей поездки! 😊';
+    } else {
+      return 'Понял вас, спасибо за информацию! ✅';
+    }
+  };
+
+  useEffect(() => {
+    if (chatScrollRef.current) {
+      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+    }
+  }, [messages]);
 
   const menuItems = [
     { id: 'order', label: 'Заказ', icon: 'Car' },
@@ -594,6 +651,14 @@ const Index = () => {
                       )}
                     </div>
                   )}
+
+                  <Button
+                    onClick={() => setChatOpen(true)}
+                    className="w-full bg-gradient-to-r from-primary to-accent"
+                  >
+                    <Icon name="MessageCircle" className="mr-2" size={18} />
+                    Написать водителю
+                  </Button>
                 </CardContent>
               </Card>
             )}
@@ -839,6 +904,101 @@ const Index = () => {
             </Card>
           </div>
         )}
+
+        <Dialog open={chatOpen} onOpenChange={setChatOpen}>
+          <DialogContent className="max-w-md h-[600px] flex flex-col p-0">
+            <DialogHeader className="p-4 border-b">
+              <DialogTitle className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
+                  <Icon name="User" size={20} className="text-primary" />
+                </div>
+                <div>
+                  <p className="font-semibold">{currentOrder?.driverName || 'Водитель'}</p>
+                  <p className="text-xs text-muted-foreground">{currentOrder?.carNumber}</p>
+                </div>
+              </DialogTitle>
+            </DialogHeader>
+            
+            <div className="flex-1 overflow-hidden">
+              <div 
+                ref={chatScrollRef}
+                className="h-full overflow-y-auto p-4 space-y-3"
+              >
+                {messages.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Icon name="MessageCircle" size={48} className="mx-auto mb-2 opacity-50" />
+                    <p>Начните диалог с водителем</p>
+                  </div>
+                ) : (
+                  messages.map((msg) => (
+                    <div
+                      key={msg.id}
+                      className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+                    >
+                      <div
+                        className={`max-w-[75%] rounded-2xl px-4 py-2 ${
+                          msg.sender === 'user'
+                            ? 'bg-gradient-to-r from-primary to-accent text-white'
+                            : 'bg-muted'
+                        }`}
+                      >
+                        <p className="text-sm">{msg.text}</p>
+                        <p className={`text-xs mt-1 ${msg.sender === 'user' ? 'text-white/70' : 'text-muted-foreground'}`}>
+                          {msg.time}
+                        </p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <div className="p-4 border-t bg-background">
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Напишите сообщение..."
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+                  className="flex-1"
+                />
+                <Button
+                  onClick={sendMessage}
+                  disabled={!newMessage.trim()}
+                  className="bg-gradient-to-r from-primary to-accent"
+                >
+                  <Icon name="Send" size={18} />
+                </Button>
+              </div>
+              <div className="flex gap-2 mt-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setNewMessage('Где вы сейчас?')}
+                  className="flex-1 text-xs"
+                >
+                  📍 Где вы?
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setNewMessage('У меня багаж')}
+                  className="flex-1 text-xs"
+                >
+                  🧳 Багаж
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setNewMessage('Подождите минуту')}
+                  className="flex-1 text-xs"
+                >
+                  ⏱️ Подождите
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         <Dialog open={ratingDialogOpen} onOpenChange={setRatingDialogOpen}>
           <DialogContent className="max-w-md">
