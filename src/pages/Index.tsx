@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -28,6 +28,8 @@ interface Order {
   rating?: number;
   review?: string;
   driverRating?: number;
+  driverLocation?: { lat: number; lng: number };
+  userLocation?: { lat: number; lng: number };
 }
 
 interface Tariff {
@@ -47,6 +49,9 @@ const Index = () => {
   const [selectedOrderForRating, setSelectedOrderForRating] = useState<Order | null>(null);
   const [tempRating, setTempRating] = useState(0);
   const [tempReview, setTempReview] = useState('');
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [trackingDriver, setTrackingDriver] = useState(false);
+  const driverMoveInterval = useRef<NodeJS.Timeout | null>(null);
   const [currentOrder, setCurrentOrder] = useState<Order | null>(null);
   const [incomingOrders, setIncomingOrders] = useState<Order[]>([]);
   const [activeSection, setActiveSection] = useState<string>('order');
@@ -111,6 +116,67 @@ const Index = () => {
 
   const stats = calculateStats();
 
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setUserLocation({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+          });
+          toast({
+            title: '📍 Геолокация',
+            description: 'Ваше местоположение определено',
+          });
+        },
+        (error) => {
+          console.log('Geolocation error:', error);
+          setUserLocation({ lat: 55.7558, lng: 37.6173 });
+        }
+      );
+    } else {
+      setUserLocation({ lat: 55.7558, lng: 37.6173 });
+    }
+  }, []);
+
+  useEffect(() => {
+    if (trackingDriver && currentOrder?.driverLocation) {
+      driverMoveInterval.current = setInterval(() => {
+        setCurrentOrder((prev) => {
+          if (!prev || !prev.driverLocation || !userLocation) return prev;
+          
+          const latDiff = userLocation.lat - prev.driverLocation.lat;
+          const lngDiff = userLocation.lng - prev.driverLocation.lng;
+          
+          const newLat = prev.driverLocation.lat + latDiff * 0.1;
+          const newLng = prev.driverLocation.lng + lngDiff * 0.1;
+          
+          const distance = Math.sqrt(
+            Math.pow(userLocation.lat - newLat, 2) + Math.pow(userLocation.lng - newLng, 2)
+          );
+          
+          if (distance < 0.001) {
+            setTrackingDriver(false);
+            if (driverMoveInterval.current) clearInterval(driverMoveInterval.current);
+            toast({
+              title: '🎉 Водитель прибыл!',
+              description: 'Водитель ждёт вас',
+            });
+          }
+          
+          return {
+            ...prev,
+            driverLocation: { lat: newLat, lng: newLng },
+          };
+        });
+      }, 1000);
+    }
+    
+    return () => {
+      if (driverMoveInterval.current) clearInterval(driverMoveInterval.current);
+    };
+  }, [trackingDriver, userLocation]);
+
   const calculateEstimate = () => {
     if (!from || !to) return;
     const randomDistance = Math.floor(Math.random() * 20) + 3;
@@ -158,6 +224,9 @@ const Index = () => {
 
     setTimeout(() => {
       const driverRating = (Math.random() * 2 + 3).toFixed(1);
+      const driverLat = userLocation ? userLocation.lat + (Math.random() * 0.02 - 0.01) : 55.7558;
+      const driverLng = userLocation ? userLocation.lng + (Math.random() * 0.02 - 0.01) : 37.6173;
+      
       const updatedOrder = {
         ...newOrder,
         status: 'found' as OrderStatus,
@@ -165,8 +234,11 @@ const Index = () => {
         carNumber: 'А777АА777',
         arrivalTime: 5,
         driverRating: parseFloat(driverRating),
+        userLocation: userLocation || { lat: 55.7558, lng: 37.6173 },
+        driverLocation: { lat: driverLat, lng: driverLng },
       };
       setCurrentOrder(updatedOrder);
+      setTrackingDriver(true);
       
       const completedOrder = { ...updatedOrder, status: 'completed' as OrderStatus };
       setOrderHistory([completedOrder, ...orderHistory]);
@@ -425,6 +497,103 @@ const Index = () => {
                       <p className="text-2xl font-bold text-primary">{currentOrder.price}₽</p>
                     </div>
                   </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {currentOrder && currentOrder.status === 'found' && currentOrder.driverLocation && (
+              <Card className="shadow-lg border-2 border-accent/50 bg-gradient-to-br from-accent/5 to-primary/5 animate-slide-up">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-accent">
+                    <Icon name="MapPin" size={24} />
+                    Отслеживание такси
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="relative w-full h-64 bg-muted rounded-xl overflow-hidden border-2">
+                    <div className="absolute inset-0 bg-gradient-to-br from-blue-100 to-green-100">
+                      <svg className="w-full h-full">
+                        <defs>
+                          <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+                            <path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(0,0,0,0.05)" strokeWidth="0.5"/>
+                          </pattern>
+                        </defs>
+                        <rect width="100%" height="100%" fill="url(#grid)" />
+                        
+                        {userLocation && (
+                          <circle
+                            cx="50%"
+                            cy="50%"
+                            r="8"
+                            fill="#0EA5E9"
+                            className="animate-pulse"
+                          />
+                        )}
+                        
+                        {currentOrder.driverLocation && userLocation && (
+                          <>
+                            <circle
+                              cx={`${50 + (currentOrder.driverLocation.lng - userLocation.lng) * 2000}%`}
+                              cy={`${50 + (currentOrder.driverLocation.lat - userLocation.lat) * 2000}%`}
+                              r="10"
+                              fill="#F97316"
+                              className="animate-pulse"
+                            />
+                            <line
+                              x1="50%"
+                              y1="50%"
+                              x2={`${50 + (currentOrder.driverLocation.lng - userLocation.lng) * 2000}%`}
+                              y2={`${50 + (currentOrder.driverLocation.lat - userLocation.lat) * 2000}%`}
+                              stroke="#8B5CF6"
+                              strokeWidth="2"
+                              strokeDasharray="5,5"
+                              className="animate-pulse"
+                            />
+                          </>
+                        )}
+                      </svg>
+                      
+                      <div className="absolute top-3 left-3 bg-white/90 backdrop-blur-sm rounded-lg px-3 py-2 shadow-lg">
+                        <div className="flex items-center gap-2 text-sm">
+                          <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+                          <span className="font-medium">Вы</span>
+                        </div>
+                      </div>
+                      
+                      <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-sm rounded-lg px-3 py-2 shadow-lg">
+                        <div className="flex items-center gap-2 text-sm">
+                          <div className="w-3 h-3 rounded-full bg-orange-500"></div>
+                          <span className="font-medium">Водитель</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center justify-between bg-accent/10 rounded-lg p-3">
+                    <div className="flex items-center gap-2">
+                      <Icon name="Navigation2" size={20} className="text-accent" />
+                      <span className="text-sm font-medium">Водитель едет к вам</span>
+                    </div>
+                    <Badge className="bg-accent text-white">
+                      <Icon name="Clock" size={14} className="mr-1" />
+                      {currentOrder.arrivalTime} мин
+                    </Badge>
+                  </div>
+
+                  {userLocation && (
+                    <div className="text-xs text-muted-foreground space-y-1">
+                      <div className="flex items-center gap-2">
+                        <Icon name="MapPin" size={12} />
+                        <span>Ваши координаты: {userLocation.lat.toFixed(4)}, {userLocation.lng.toFixed(4)}</span>
+                      </div>
+                      {currentOrder.driverLocation && (
+                        <div className="flex items-center gap-2">
+                          <Icon name="Car" size={12} />
+                          <span>Водитель: {currentOrder.driverLocation.lat.toFixed(4)}, {currentOrder.driverLocation.lng.toFixed(4)}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             )}
