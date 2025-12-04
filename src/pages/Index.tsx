@@ -12,6 +12,7 @@ import { toast } from '@/hooks/use-toast';
 type UserRole = 'passenger' | 'driver';
 type OrderStatus = 'searching' | 'found' | 'accepted' | 'completed';
 type TariffType = 'economy' | 'comfort' | 'business';
+type PaymentMethod = 'card' | 'cash' | 'qr';
 
 interface ChatMessage {
   id: string;
@@ -38,6 +39,8 @@ interface Order {
   driverRating?: number;
   driverLocation?: { lat: number; lng: number };
   userLocation?: { lat: number; lng: number };
+  paymentMethod?: PaymentMethod;
+  isPaid?: boolean;
 }
 
 interface Tariff {
@@ -70,6 +73,10 @@ const Index = () => {
   const [selectedTariff, setSelectedTariff] = useState<TariffType>('economy');
   const [estimatedPrice, setEstimatedPrice] = useState<number | null>(null);
   const [orderHistory, setOrderHistory] = useState<Order[]>([]);
+  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethod>('card');
+  const [selectedOrderForPayment, setSelectedOrderForPayment] = useState<Order | null>(null);
+  const [qrCodeGenerated, setQrCodeGenerated] = useState(false);
 
   const tariffs: Tariff[] = [
     {
@@ -311,6 +318,47 @@ const Index = () => {
     toast({
       title: '⭐ Спасибо за отзыв!',
       description: `Вы оценили поездку на ${tempRating} звёзд`,
+    });
+  };
+
+  const openPaymentDialog = (order: Order) => {
+    setSelectedOrderForPayment(order);
+    setSelectedPaymentMethod('card');
+    setQrCodeGenerated(false);
+    setPaymentDialogOpen(true);
+  };
+
+  const processPayment = () => {
+    if (!selectedOrderForPayment) return;
+    
+    if (selectedPaymentMethod === 'qr' && !qrCodeGenerated) {
+      setQrCodeGenerated(true);
+      toast({
+        title: '📱 QR-код сгенерирован',
+        description: 'Отсканируйте код для оплаты',
+      });
+      return;
+    }
+    
+    const updatedHistory = orderHistory.map(order => 
+      order.id === selectedOrderForPayment.id 
+        ? { ...order, isPaid: true, paymentMethod: selectedPaymentMethod }
+        : order
+    );
+    
+    setOrderHistory(updatedHistory);
+    setPaymentDialogOpen(false);
+    setQrCodeGenerated(false);
+    
+    const methodNames = {
+      card: 'Картой',
+      cash: 'Наличными',
+      qr: 'QR-кодом'
+    };
+    
+    toast({
+      title: '✅ Оплата успешна!',
+      description: `Оплачено ${methodNames[selectedPaymentMethod]} • ${selectedOrderForPayment.price}₽`,
     });
   };
 
@@ -724,33 +772,57 @@ const Index = () => {
                               </div>
                             </div>
                           )}
-                          {order.rating ? (
-                            <div className="pt-2 border-t">
-                              <div className="flex items-center gap-1 mb-1">
-                                {[1, 2, 3, 4, 5].map((star) => (
-                                  <Icon
-                                    key={star}
-                                    name="Star"
-                                    size={16}
-                                    className={star <= order.rating! ? 'text-yellow-500 fill-yellow-500' : 'text-gray-300'}
-                                  />
-                                ))}
+                          <div className="pt-2 border-t space-y-2">
+                            {order.isPaid ? (
+                              <div className="flex items-center justify-between bg-green-500/10 border border-green-500/30 rounded-lg p-2">
+                                <div className="flex items-center gap-2">
+                                  <Icon name="CheckCircle2" size={16} className="text-green-600" />
+                                  <span className="text-xs font-medium text-green-600">Оплачено</span>
+                                  {order.paymentMethod === 'card' && <span className="text-xs text-muted-foreground">• Картой</span>}
+                                  {order.paymentMethod === 'cash' && <span className="text-xs text-muted-foreground">• Наличными</span>}
+                                  {order.paymentMethod === 'qr' && <span className="text-xs text-muted-foreground">• QR-кодом</span>}
+                                </div>
+                                <Icon name="Wallet" size={16} className="text-green-600" />
                               </div>
-                              {order.review && (
-                                <p className="text-xs text-muted-foreground italic">{order.review}</p>
-                              )}
-                            </div>
-                          ) : (
-                            <Button
-                              onClick={() => openRatingDialog(order)}
-                              variant="outline"
-                              size="sm"
-                              className="w-full mt-2"
-                            >
-                              <Icon name="Star" className="mr-2" size={14} />
-                              Оценить поездку
-                            </Button>
-                          )}
+                            ) : (
+                              <Button
+                                onClick={() => openPaymentDialog(order)}
+                                className="w-full bg-gradient-to-r from-green-600 to-green-500"
+                                size="sm"
+                              >
+                                <Icon name="CreditCard" className="mr-2" size={14} />
+                                Оплатить {order.price}₽
+                              </Button>
+                            )}
+                            
+                            {order.rating ? (
+                              <div>
+                                <div className="flex items-center gap-1 mb-1">
+                                  {[1, 2, 3, 4, 5].map((star) => (
+                                    <Icon
+                                      key={star}
+                                      name="Star"
+                                      size={16}
+                                      className={star <= order.rating! ? 'text-yellow-500 fill-yellow-500' : 'text-gray-300'}
+                                    />
+                                  ))}
+                                </div>
+                                {order.review && (
+                                  <p className="text-xs text-muted-foreground italic">{order.review}</p>
+                                )}
+                              </div>
+                            ) : (
+                              <Button
+                                onClick={() => openRatingDialog(order)}
+                                variant="outline"
+                                size="sm"
+                                className="w-full"
+                              >
+                                <Icon name="Star" className="mr-2" size={14} />
+                                Оценить поездку
+                              </Button>
+                            )}
+                          </div>
                         </CardContent>
                       </Card>
                     ))
@@ -1063,6 +1135,163 @@ const Index = () => {
                   >
                     <Icon name="Send" className="mr-2" size={18} />
                     Отправить отзыв
+                  </Button>
+                </>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={paymentDialogOpen} onOpenChange={setPaymentDialogOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Icon name="CreditCard" size={24} className="text-primary" />
+                Оплата поездки
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 pt-4">
+              {selectedOrderForPayment && (
+                <>
+                  <div className="bg-gradient-to-r from-primary/10 to-accent/10 rounded-xl p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-1">
+                        <p className="text-xs text-muted-foreground">Сумма к оплате</p>
+                        <p className="text-3xl font-bold text-primary">{selectedOrderForPayment.price}₽</p>
+                        <div className="text-xs text-muted-foreground">
+                          {tariffs.find(t => t.id === selectedOrderForPayment.tariff)?.name} • {selectedOrderForPayment.distance} км
+                        </div>
+                      </div>
+                      <Icon name="Wallet" size={48} className="text-primary/30" />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Способ оплаты</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      <button
+                        onClick={() => setSelectedPaymentMethod('card')}
+                        className={`p-4 rounded-xl border-2 transition-all hover:scale-105 ${
+                          selectedPaymentMethod === 'card'
+                            ? 'border-primary bg-primary/10'
+                            : 'border-border bg-background hover:border-primary/50'
+                        }`}
+                      >
+                        <Icon
+                          name="CreditCard"
+                          size={28}
+                          className={selectedPaymentMethod === 'card' ? 'text-primary mx-auto' : 'text-muted-foreground mx-auto'}
+                        />
+                        <p className={`text-xs font-semibold mt-2 ${selectedPaymentMethod === 'card' ? 'text-primary' : 'text-foreground'}`}>
+                          Карта
+                        </p>
+                      </button>
+
+                      <button
+                        onClick={() => setSelectedPaymentMethod('cash')}
+                        className={`p-4 rounded-xl border-2 transition-all hover:scale-105 ${
+                          selectedPaymentMethod === 'cash'
+                            ? 'border-secondary bg-secondary/10'
+                            : 'border-border bg-background hover:border-secondary/50'
+                        }`}
+                      >
+                        <Icon
+                          name="Banknote"
+                          size={28}
+                          className={selectedPaymentMethod === 'cash' ? 'text-secondary mx-auto' : 'text-muted-foreground mx-auto'}
+                        />
+                        <p className={`text-xs font-semibold mt-2 ${selectedPaymentMethod === 'cash' ? 'text-secondary' : 'text-foreground'}`}>
+                          Наличные
+                        </p>
+                      </button>
+
+                      <button
+                        onClick={() => setSelectedPaymentMethod('qr')}
+                        className={`p-4 rounded-xl border-2 transition-all hover:scale-105 ${
+                          selectedPaymentMethod === 'qr'
+                            ? 'border-accent bg-accent/10'
+                            : 'border-border bg-background hover:border-accent/50'
+                        }`}
+                      >
+                        <Icon
+                          name="QrCode"
+                          size={28}
+                          className={selectedPaymentMethod === 'qr' ? 'text-accent mx-auto' : 'text-muted-foreground mx-auto'}
+                        />
+                        <p className={`text-xs font-semibold mt-2 ${selectedPaymentMethod === 'qr' ? 'text-accent' : 'text-foreground'}`}>
+                          QR-код
+                        </p>
+                      </button>
+                    </div>
+                  </div>
+
+                  {selectedPaymentMethod === 'qr' && qrCodeGenerated && (
+                    <div className="bg-white rounded-xl p-6 border-2 border-accent animate-fade-in">
+                      <div className="space-y-3">
+                        <div className="w-full aspect-square bg-gradient-to-br from-accent/20 to-primary/20 rounded-lg flex items-center justify-center">
+                          <div className="grid grid-cols-8 gap-1 p-4">
+                            {Array.from({ length: 64 }).map((_, i) => (
+                              <div
+                                key={i}
+                                className={`w-3 h-3 rounded-sm ${
+                                  Math.random() > 0.5 ? 'bg-foreground' : 'bg-transparent'
+                                }`}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                        <div className="text-center space-y-1">
+                          <p className="text-sm font-medium">Отсканируйте для оплаты</p>
+                          <p className="text-xs text-muted-foreground">QR-код действителен 10 минут</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedPaymentMethod === 'card' && (
+                    <div className="space-y-2 animate-fade-in">
+                      <label className="text-xs font-medium text-muted-foreground">Номер карты</label>
+                      <Input
+                        placeholder="1234 5678 9012 3456"
+                        className="text-center tracking-wider"
+                      />
+                    </div>
+                  )}
+
+                  {selectedPaymentMethod === 'cash' && (
+                    <div className="bg-muted/50 rounded-xl p-4 animate-fade-in">
+                      <div className="flex items-start gap-3">
+                        <Icon name="Info" size={20} className="text-secondary mt-0.5" />
+                        <div className="space-y-1">
+                          <p className="text-sm font-medium">Оплата наличными</p>
+                          <p className="text-xs text-muted-foreground">
+                            Передайте оплату водителю в конце поездки. Подтвердите для фиксации способа оплаты.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <Button
+                    onClick={processPayment}
+                    className="w-full bg-gradient-to-r from-primary to-accent text-lg py-6"
+                  >
+                    {selectedPaymentMethod === 'qr' && !qrCodeGenerated ? (
+                      <>
+                        <Icon name="QrCode" className="mr-2" size={20} />
+                        Сгенерировать QR-код
+                      </>
+                    ) : selectedPaymentMethod === 'cash' ? (
+                      <>
+                        <Icon name="Check" className="mr-2" size={20} />
+                        Подтвердить
+                      </>
+                    ) : (
+                      <>
+                        <Icon name="CreditCard" className="mr-2" size={20} />
+                        Оплатить {selectedOrderForPayment.price}₽
+                      </>
+                    )}
                   </Button>
                 </>
               )}
