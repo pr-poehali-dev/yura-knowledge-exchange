@@ -97,11 +97,13 @@ const Index = () => {
   const [referralDialogOpen, setReferralDialogOpen] = useState(false);
   const [referralCode, setReferralCode] = useState('YUGO-DRV-12345');
   const [referrals, setReferrals] = useState<Referral[]>([
-    { id: '1', name: 'Иван П.', status: 'active', bonus: 500, date: '10.11.2024' },
-    { id: '2', name: 'Мария С.', status: 'active', bonus: 500, date: '15.11.2024' },
+    { id: '1', name: 'Иван П.', status: 'active', bonus: 300, date: '10.11.2024' },
+    { id: '2', name: 'Мария С.', status: 'active', bonus: 300, date: '15.11.2024' },
     { id: '3', name: 'Дмитрий К.', status: 'pending', bonus: 0, date: '01.12.2024' },
   ]);
-  const [totalReferralBonus, setTotalReferralBonus] = useState(1000);
+  const [totalReferralBonus, setTotalReferralBonus] = useState(600);
+  const [isDriverWorking, setIsDriverWorking] = useState(false);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
   const [driverSubscription, setDriverSubscription] = useState<DriverSubscription>({
     status: 'none',
@@ -113,6 +115,49 @@ const Index = () => {
       setTimeout(() => setSubscriptionDialogOpen(true), 1000);
     }
   }, [role, driverSubscription.status]);
+
+  useEffect(() => {
+    if ('Notification' in window && notificationsEnabled) {
+      Notification.requestPermission();
+    }
+  }, [notificationsEnabled]);
+
+  useEffect(() => {
+    if (role === 'driver' && isDriverWorking && incomingOrders.length > 0) {
+      const latestOrder = incomingOrders[incomingOrders.length - 1];
+      
+      if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification('🚖 Новый заказ!', {
+          body: `${latestOrder.from} → ${latestOrder.to}\nЦена: ${latestOrder.price}₽`,
+          icon: '/favicon.ico',
+          badge: '/favicon.ico',
+          tag: latestOrder.id,
+          requireInteraction: true,
+        });
+      }
+
+      const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIGGi78OWgTRALUKXh8bllHgU2jdXzzn0vBSl+zPLaizsKE12y6OyrWBgLRp7d8sFwIwUrgs/y2Ik3CBlou+/mok0QC0+k4fK3ZBwGNo7V8s9+LgUpcM3y2Yw6ChNdsujs');
+      audio.play().catch(() => {});
+    }
+  }, [incomingOrders, role, isDriverWorking]);
+
+  const toggleDriverWork = () => {
+    const newStatus = !isDriverWorking;
+    setIsDriverWorking(newStatus);
+    
+    if (newStatus) {
+      setNotificationsEnabled(true);
+      toast({
+        title: '✅ Статус обновлен',
+        description: 'Вы в сети! Заказы начнут поступать.',
+      });
+    } else {
+      toast({
+        title: '⏸️ Статус обновлен',
+        description: 'Вы не в сети. Заказы не будут поступать.',
+      });
+    }
+  };
 
   const tariffs: Tariff[] = [
     {
@@ -1437,6 +1482,42 @@ const Index = () => {
                 </CardContent>
               </Card>
             )}
+
+            <Card className="shadow-lg border-2 border-accent">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 ${
+                      isDriverWorking 
+                        ? 'bg-gradient-to-br from-green-500 to-green-600 shadow-lg shadow-green-500/50' 
+                        : 'bg-gray-300'
+                    }`}>
+                      <Icon name={isDriverWorking ? "Radio" : "PowerOff"} size={28} className="text-white" />
+                    </div>
+                    <div>
+                      <p className={`text-lg font-bold ${isDriverWorking ? 'text-green-600' : 'text-gray-500'}`}>
+                        {isDriverWorking ? '🟢 В сети' : '⚪ Не в сети'}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {isDriverWorking ? 'Вы получаете заказы' : 'Заказы не поступают'}
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    onClick={toggleDriverWork}
+                    size="lg"
+                    className={`transition-all duration-300 ${
+                      isDriverWorking
+                        ? 'bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700'
+                        : 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700'
+                    }`}
+                  >
+                    <Icon name={isDriverWorking ? "Pause" : "Play"} className="mr-2" size={20} />
+                    {isDriverWorking ? 'Остановить' : 'Работаю'}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
             
             <Card className="shadow-lg border-2 border-secondary">
               <CardHeader>
@@ -1785,7 +1866,7 @@ const Index = () => {
                 <Icon name="Gift" size={48} className="mx-auto text-accent" />
                 <h3 className="text-2xl font-bold">🎁 Приглашай и зарабатывай</h3>
                 <p className="text-sm text-muted-foreground">
-                  Получай 500₽ за каждого водителя, который оформит подписку по твоей ссылке
+                  Получай 300₽ за каждого водителя, который оформит подписку по твоей ссылке
                 </p>
               </div>
 
@@ -1899,7 +1980,7 @@ const Index = () => {
                         <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside">
                           <li>Поделись своим кодом с друзьями</li>
                           <li>Они регистрируются и оформляют подписку</li>
-                          <li>Ты получаешь 500₽ за каждого</li>
+                          <li>Ты получаешь 300₽ за каждого</li>
                           <li>Бонусы можно использовать для оплаты подписки</li>
                         </ul>
                       </div>
